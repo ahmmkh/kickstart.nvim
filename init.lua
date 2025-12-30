@@ -49,8 +49,7 @@ Kickstart Guide:
       - <escape key>
       - :
       - Tutor
-      - <enter key>
-
+     - <enter key>
     (If you already know the Neovim basics, you can skip this step.)
 
   Once you've completed that, you can continue working through **AND READING** the rest
@@ -180,6 +179,8 @@ vim.keymap.set('n', '<leader>q', vim.diagnostic.setloclist, { desc = 'Open diagn
 -- for people to discover. Otherwise, you normally need to press <C-\><C-n>, which
 -- is not what someone will guess without a bit more experience.
 --
+vim.keymap.set('i', 'jk', '<Esc>')
+vim.keymap.set('i', 'kj', '<Esc>')
 -- NOTE: This won't work in all terminal emulators/tmux/etc. Try your own mapping
 -- or just use <C-\><C-n> to exit terminal mode
 vim.keymap.set('t', '<Esc><Esc>', '<C-\\><C-n>', { desc = 'Exit terminal mode' })
@@ -464,6 +465,87 @@ require('lazy').setup({
 
   -- LSP Plugins
   {
+    'scalameta/nvim-metals',
+    ft = { 'scala', 'sbt', 'java' },
+    dependencies = {
+      'nvim-lua/plenary.nvim',
+      'saghen/blink.cmp',
+    },
+    keys = {
+      {
+        '<leader>mh',
+        function()
+          require('metals').hover_worksheet()
+        end,
+        desc = 'Metals Worksheet Hover',
+      },
+      {
+        '<leader>md',
+        function()
+          -- Debug: show available metals functions
+          local metals = require('metals')
+          local funcs = {}
+          for k, v in pairs(metals) do
+            if type(v) == 'function' then
+              table.insert(funcs, k)
+            end
+          end
+          table.sort(funcs)
+          vim.notify('Available Metals functions:\n' .. table.concat(funcs, '\n'), vim.log.levels.INFO)
+        end,
+        desc = 'Debug: Show Metals functions',
+      },
+      {
+        '<leader>cM',
+        function()
+          require('telescope').extensions.metals.commands()
+        end,
+        desc = 'Telescope Metals Commands',
+      },
+    },
+    opts = function()
+      local metals_config = require('metals').bare_config()
+
+      -- Enable LSP capabilities from blink.cmp
+      metals_config.capabilities = require('blink.cmp').get_lsp_capabilities()
+      --      metals_config.capabilities = require('cmp_nvim_lsp').default_capabilities()
+
+      -- Initialize tvp (for worksheet decorations)
+      metals_config.init_options.statusBarProvider = 'on'
+
+      -- Settings for metals
+      metals_config.settings = {
+        showImplicitArguments = true,
+        showImplicitConversionsAndClasses = true,
+        showInferredType = true,
+        excludedPackages = {
+          'akka.actor.typed.javadsl',
+          'com.github.swagger.akka.javadsl',
+        },
+      }
+
+      -- on_attach function for metals-specific keybindings
+      metals_config.on_attach = function(client, bufnr)
+        -- Enable inlay hints (required for worksheet hover to work)
+        if client.server_capabilities.inlayHintProvider then
+          vim.lsp.inlay_hint.enable(true, { bufnr = bufnr })
+        end
+      end
+
+      return metals_config
+    end,
+    config = function(self, metals_config)
+      local nvim_metals_group = vim.api.nvim_create_augroup('nvim-metals', { clear = true })
+      vim.api.nvim_create_autocmd('FileType', {
+        pattern = self.ft,
+        callback = function()
+          require('metals').initialize_or_attach(metals_config)
+        end,
+        group = nvim_metals_group,
+      })
+    end,
+  },
+  {
     -- `lazydev` configures Lua LSP for your Neovim config, runtime and plugins
     -- used for completion, annotations and signatures of Neovim apis
     'folke/lazydev.nvim',
@@ -671,10 +753,10 @@ require('lazy').setup({
       --  - settings (table): Override the default settings passed when initializing the server.
       --        For example, to see the options for `lua_ls`, you could go to: https://luals.github.io/wiki/settings/
       local servers = {
-        -- clangd = {},
-        -- gopls = {},
-        -- pyright = {},
-        -- rust_analyzer = {},
+        clangd = {},
+        gopls = {},
+        pyright = {},
+        rust_analyzer = {},
         -- ... etc. See `:help lspconfig-all` for a list of all the pre-configured LSPs
         --
         -- Some languages (like typescript) have entire language plugins that can be useful:
